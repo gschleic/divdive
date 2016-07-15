@@ -1,6 +1,8 @@
 import {Meteor} from 'meteor/meteor';
 import '../quotes/methods.js';
+import './finscraper';
 
+var FS = FinScraper;
 
 var moment = require('moment-business-days');
 var cheerio = require('cheerio');
@@ -12,9 +14,9 @@ export default getDividendHistory = function (symbol) {
     //const ed = moment(edate,"MM/DD/YY").format("MMM+DD%2C+YYYY");
 
 
-    console.log("Dividend history for %s:",symbol);
+    console.log("Dividend history for %s:", symbol);
 
-    result = Meteor.http.get('http://www.nasdaq.com/symbol/'+symbol+'/dividend-history/');
+    result = Meteor.http.get('http://www.nasdaq.com/symbol/' + symbol + '/dividend-history/');
     $ = cheerio.load(result.content);
 
     const dividends = {};
@@ -95,94 +97,71 @@ export default getDividendHistory = function (symbol) {
     return dividends;
 }
 
-
-export default whatHappened = function (symbol,index) {
-
-    var divHistory = getDividendHistory(symbol);
-
-    if (divHistory.length == 0) {
-        console.error("No dividend history found for %s", symbol)
-    } else {
-
-        // loop through div history
-        _.each(divHistory, function (divpayout) {
-            console.log("Paid %d on %s",divpayout.amount,divpayout.exdate)
-        });
-
-        console.log("XDiv date was %s",divHistory[index].exdate);
-        console.log("The dividend amount was %d/share",divHistory[index].amount);
-
-
-        const xdiv = moment(divHistory[index].exdate,"MM/DD/YYYY");
-        const xdiv_m0 = xdiv.format("MM/DD/YY");
-        const xdiv_m1 = xdiv.businessSubtract(1).format("MM/DD/YY");
-        const xdiv_m3 = xdiv.businessSubtract(3).format("MM/DD/YY");
-        const xdiv_p3w = xdiv.businessAdd(22).format("MM/DD/YY");
-
-        // Now let get quotes from m3d to p3w (minus 3 day to plus 3 weeks)
-
-        const quotes = historicalQuote(symbol, xdiv_m3, xdiv_p3w);
-
-        console.log("Opening price on day before xdiv was %d", quotes[xdiv_m1].open);
-        console.log("Closing price on day before xdiv was %d", quotes[xdiv_m1].close);
-        if (quotes[xdiv_m1].close > quotes[xdiv_m1].open) {
-            console.log("Traded up prior to xdiv! - morning buy...");
-        }
-
-        const phaseB_profit_price = quotes[xdiv_m1].open * 1.005;
-
-        if (quotes[xdiv_m1].high > phaseB_profit_price) {
-            console.log("PHASE B PROFIT!");
-        }
-
-
-        console.log("Opening price on xdiv was %d", quotes[xdiv_m0].open);
-        console.log("Closing price on xdiv was %d", quotes[xdiv_m0].close);
-        const amount = divHistory[index].amount;
-        console.log("Should have been %d", Number(quotes[xdiv_m1].close - amount));
-
-        const phaseO_profit_price = (quotes[xdiv_m1].close - amount)*1.005;
-
-        if (quotes[xdiv_m0].high > phaseO_profit_price) {
-            console.log("PHASE O PROFIT of 0.5% possible!");
-        }
-
-
-
-        console.log("High on xdiv was %d", quotes[xdiv_m0].high);
-
-        // very key: dtbe - days to break even post div..
-        // we need to assume some entry price. Let's take the close price on day -1
-        // inouts:
-        const basePrice = quotes[xdiv_m1].close;
-        const bePrice = basePrice - amount;
-
-        const dtbe = 0;
-        const beArray = []
-        for (i = 0; i <= 21; i++) {
-            const dayToAnalyze = xdiv.businessAdd(i).format("MM/DD/YY");
-            beArray.push(parseFloat(quotes[dayToAnalyze].high - bePrice).toFixed(3));  // save the delta off break even from days high
-        }
-
-        console.log("Break even array:")
-        console.log(beArray);
-
-        // find the first index > 0 ..this is the day we had the potential to break even...
-        const gainLossArray = _.map(beArray, function(num) { return (num > 0); });
-
-        console.log(gainLossArray);
-
-
-
-
-        // symbol
-        // xdivdate
-        // days to reach price-xdiv
-        //
-
-        // console.log(quotes);
-
-    }
+export default evaluateFullDivPerformance = function (symbol) {
+    var divHistory = FS.getDividendHistory(symbol);
+    // loop through div history
+    _.each(divHistory, function (divpayout) {
+        console.log("Paid %d on %s", divpayout.amount, divpayout.exdate)
+        const result = whatHappened(symbol, divpayout);
+        console.log(result);
+    });
 }
+
+export default whatHappened = function (symbol, divpayout) {
+
+    const results = {}
+
+    results.exDivDate = divpayout.exdate;
+    results.amount = divpayout.amount;
+
+    const xdiv = moment(divpayout.exdate, "MM/DD/YYYY");
+    const xdiv_m0 = xdiv.format("MM/DD/YY");
+    const xdiv_m1 = xdiv.businessSubtract(1).format("MM/DD/YY");
+    const xdiv_m3 = xdiv.businessSubtract(3).format("MM/DD/YY");
+    const xdiv_p3w = xdiv.businessAdd(22).format("MM/DD/YY");
+
+    // Now let get quotes from m3d to p3w (minus 3 day to plus 3 weeks)
+
+    const quotes = FS.getHistoricalQuotes(symbol, xdiv_m3, xdiv_p3w);
+
+    results.xdiv_m1_open = quotes[xdiv_m1].open;
+    results.xdiv_m1_close = quotes[xdiv_m1].close;
+    results.before_rise = (quotes[xdiv_m1].close > quotes[xdiv_m1].open);
+
+    const phaseB_profit_price = quotes[xdiv_m1].open * 1.005;
+    results.before_profit = (quotes[xdiv_m1].high > phaseB_profit_price);
+
+    results.xdiv_m0_open = quotes[xdiv_m0].open;
+    results.xdiv_m0_close = quotes[xdiv_m0].close;
+    results.xdiv_m0_high = quotes[xdiv_m0].high;
+    results.on_rise = (quotes[xdiv_m0].close > quotes[xdiv_m0].open);
+
+    const phaseO_profit_price = (quotes[xdiv_m1].close - results.amount) * 1.005;
+    results.on_profit = (quotes[xdiv_m0].high > phaseO_profit_price);
+
+
+    const basePrice = quotes[xdiv_m1].close;
+    const bePrice = basePrice - results.amount;
+
+    const dtbe = 0;
+    const beArray = []
+    for (i = 0; i <= 21; i++) {
+        const dayToAnalyze = xdiv.businessAdd(i).format("MM/DD/YY");
+        beArray.push(parseFloat(quotes[dayToAnalyze].high - bePrice).toFixed(3));  // save the delta off break even from days high
+    }
+
+    results.beArray = beArray;
+
+    // find the first index > 0 ..this is the day we had the potential to break even...
+    const gainLossArray = _.map(beArray, function (num) {
+        return (num > 0);
+    });
+
+    results.gainLossArray = gainLossArray;
+
+    return results;
+
+}
+
 
 

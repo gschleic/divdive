@@ -12,6 +12,8 @@ import '../imports/api/stocks/methods.js';
 // Libraries
 import '../imports/api/stocks/lib.js';
 
+import '../imports/api/stocks/finscraper';
+
 // Publications
 import '../imports/api/positions/publications.js';
 import '../imports/api/stocks/publications.js';
@@ -28,15 +30,15 @@ var cheerio = require('cheerio');
 
 Meteor.startup(function () {
 
-    result = Meteor.http.get('http://finance.yahoo.com/webservice/v1/symbols/CSCO,AAPL/quote?format=json&view=detail');
-    var stockinfo = JSON.parse(result.content);
-    console.log(stockinfo.list.resources[1].resource.fields.price);
+    //result = Meteor.http.get('http://finance.yahoo.com/webservice/v1/symbols/CSCO,AAPL/quote?format=json&view=detail');
+    //var stockinfo = JSON.parse(result.content);
+    //console.log(stockinfo.list.resources[1].resource.fields.price);
     //$ = cheerio.load(result.content);
 
     // Test Twilio
 
     //Send an SMS text message
-    client.sendMessage({
+    /* client.sendMessage({
 
         to:'+19197203889', // Any number Twilio can deliver to
         from: '+19292654022', // A number you bought from Twilio and can use for outbound communication
@@ -56,7 +58,7 @@ Meteor.startup(function () {
         } else {
             console.log(err);
         }
-    });
+    });*/
 
 
 });

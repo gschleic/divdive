@@ -13,11 +13,14 @@ SyncedCron.add({
     name: 'Load any new stocks',
     schedule: function(parser) {
         // parser is a later.parse object
-        return parser.text('at 7:08AM');
+        return parser.text('every four hours');
     },
     job: function() {
         console.log("CRON: Loading new stocks");
-        findNewStocks();
+        findNewStocks(0);
+        findNewStocks(1);
+        findNewStocks(2);
+        findNewStocks(3);
         return 64;
     }
 });
@@ -28,7 +31,7 @@ SyncedCron.add({
     name: 'Augment new stocks with data',
     schedule: function(parser) {
         // parser is a later.parse object
-        return parser.text('every 2 hours');
+        return parser.text('every 4 hours');
     },
     job: function() {
         console.log("CRON: stock data augmentation");
@@ -43,7 +46,7 @@ SyncedCron.add({
     name: 'Screen stocks ',
     schedule: function(parser) {
         // parser is a later.parse object
-        return parser.text('every 1 hour');
+        return parser.text('every 30 minutes');
     },
     job: function() {
         console.log("CRON: stock data screening and scoring");
@@ -58,7 +61,7 @@ SyncedCron.add({
     name: 'Monitor stocks - Real Time Quotes',
     schedule: function(parser) {
         // parser is a later.parse object
-        return parser.text('every 10 minutes');
+        return parser.text('every 60 minutes');
     },
     job: function() {
         console.log("CRON: real time stock quotes");
