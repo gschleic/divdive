@@ -1,12 +1,48 @@
 import {Meteor} from 'meteor/meteor';
 import '../quotes/methods.js';
-import './finscraper';
+
+import './finscraper.js';
 
 var FS = FinScraper;
 
 var moment = require('moment-business-days');
 var cheerio = require('cheerio');
 var _ = require('underscore');
+
+
+
+export default getHistoricalQuotesCSV = function (symbol, sdate, edate) {
+
+    const sd = moment(sdate, "MM/DD/YY").format("MMM+DD%2C+YYYY");
+    const ed = moment(edate, "MM/DD/YY").format("MMM+DD%2C+YYYY");
+
+    result = Meteor.http.get('https://www.google.com/finance/historical?q=' + symbol + '&startdate=' + sd + '&enddate=' + ed + '&num=30');
+    $ = cheerio.load(result.content);
+
+    var quote = $('.historical_price').find('tr').text();
+
+    var cells = quote.split('\n\n');
+
+    const removefirst = cells.shift();
+    let record = "";
+
+    cells.forEach(function (cell) {
+        const q = cell.split('\n');
+
+        const thedate = new Date(q[0]);
+
+        const thedate2 = String(moment(thedate).format("MM/DD/YY"));
+
+        record = record + thedate2 + ",";
+        record = record + q[1] + ",";
+        record = record + q[2] + ",";
+        record = record + q[3] + ",";
+        record = record + q[4] + ",";
+    });
+
+    return record;
+}
+
 
 export default getDividendHistory = function (symbol) {
 

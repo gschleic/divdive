@@ -4,6 +4,7 @@ var _ = require('underscore');
 var moment = require('moment-business-days');
 
 import {Stocks} from './stocks';
+import {PayoutHistory} from '../payouthistory/payouthistory';
 
 import './lib';
 
@@ -80,6 +81,174 @@ export default FinScraper = {
 
         return record;
     },
+
+    getPayoutHistory: function (symbol, exdivdate, divamt) {
+
+        const DAYSTOTRACK = 10;
+
+        const record = {};
+        record.symbol = symbol;
+        record.exdivdate = exdivdate;
+        record.amount = divamt;
+        record.complete = true;
+
+
+        const exdiv = moment(exdivdate, "MM/DD/YY");
+
+        const startdate = exdiv.businessSubtract(1).format("MM/DD/YY");
+        const enddate = exdiv.businessAdd(DAYSTOTRACK).format("MM/DD/YY");
+
+        // set up keydate index map
+        // will help build the return object with key relative to the exdiv date
+        //  e.g.  keydates["07/04/16"} = 4  ...the 4 will become index in the exdiv array. 0 = xdiv -1, 1 = xdiv date, etc.
+
+        const keydates = {};
+        let adate = exdiv.businessSubtract(1).format("MM/DD/YY");
+        keydates[adate] = 0;
+
+        for (i = 1; i <= 10; i++) {
+            let adate = exdiv.businessAdd(i).format("MM/DD/YY");
+            keydates[adate] = i;
+        }
+
+        const sd = moment(startdate, "MM/DD/YY").format("MMM+DD%2C+YYYY");
+        const ed = moment(enddate, "MM/DD/YY").format("MMM+DD%2C+YYYY");
+
+        result = Meteor.http.get('https://www.google.com/finance/historical?q=' + symbol + '&startdate=' + sd + '&enddate=' + ed + '&num=30');
+        $ = cheerio.load(result.content);
+
+        var quote = $('.historical_price').find('tr').text();
+
+        var cells = quote.split('\n\n');
+        const removefirst = cells.shift();
+
+        if (cells.length < DAYSTOTRACK) {
+            console.error("Not enough history --- skipping. only got" + cells.length);
+            record.complete = false;
+            return record;
+        }
+
+
+        // placeholders
+        record.exdiv = Array.from('x'.repeat(DAYSTOTRACK));  // this will be where we put the quotes
+        record.breakeven = 0;
+        record.beflag = false;
+        record.daystobreakeven = 0;
+        record.losstrigger1div = 0;
+
+        cells.forEach(function (cell) {
+
+            const quote = {};
+
+            const q = cell.split('\n');
+
+            const thedate = new Date(q[0]);
+            const thedate2 = String(moment(thedate).format("MM/DD/YY"));
+
+            quote.date = thedate2;
+            quote.open = q[1];
+            quote.high = q[2];
+            quote.low = q[3];
+            quote.close = q[4];
+            quote.volume = q[5];
+
+            // now lets put it in the record with the right relative key...e.g. exdiv4
+            if (keydates[quote.date] != undefined) {
+                const index = keydates[quote.date];
+                record.exdiv[index] = quote;
+            }
+
+        });
+
+        // lets do some basic calculations here
+        record.breakeven = record.exdiv[0].close - record.amount;
+        record.loss1div = record.exdiv[0].close - 2 * record.amount;
+
+        // calculate break even across the timespan
+        var daysToBreakEven = 99;
+        for (var i = DAYSTOTRACK-1; i >0; i--) {
+
+            if (record.exdiv[i].high >= record.breakeven) {
+                record.exdiv[i].beflag = true;
+                daysToBreakEven = i;
+            }
+
+            record.exdiv[i].profit = parseFloat(record.exdiv[i].close - record.breakeven).toFixed(4);
+
+        }
+
+        record.daystobreakeven = daysToBreakEven;
+        if (record.daystobreakeven != 99) record.beflag = true;
+
+        return record;
+    },
+
+    dividendResearch: function (sdate, numdays) {
+
+        const sday = new moment(sdate, "MM/DD/YY");
+
+        for (i = 0; i < numdays; i++) {
+            const dateToCheck = sday.businessAdd(i).format("YYYY-MMM-DD"); // 2016-Jul-04
+            console.log("Finding stocks with an ex-dividend gate of " + dateToCheck);
+            result = Meteor.http.get('http://www.nasdaq.com/dividend-stocks/dividend-calendar.aspx?date=' + dateToCheck);
+            $ = cheerio.load(result.content);
+
+            var fields = [];
+
+            var Table = $('#Table1 tbody').find('tr').each(function (i, elem) {
+                var rec = $(this).find('td').each(function (i, elem) {
+                    fields[i] = $(this).text();
+                });
+
+                let sname = String(fields[0]);
+                let S = sname.split("(");
+
+                let reSymbol = RegExp("[(]([A-Z.]+)[)]$");
+                var sym = sname.match(reSymbol);
+
+                var X = sym[0].slice(1, -1);   // (CSCO) --> CSCO
+
+                const records = [];
+
+                const DH = getDividendHistory(X);
+
+
+                _.each(DH, function (divpayment) {
+
+                    const exdiv = moment(divpayment.exdate, "MM/DD/YYYY").format("MM/DD/YY");
+                    const record = FinScraper.getPayoutHistory(X, exdiv, divpayment.amount);
+
+                    // save in DB if it does not exist already...
+
+                    if (record.complete == true) {
+                        const found = PayoutHistory.find({ symbol: record.symbol, exdivdate: record.exdivdate}).count();
+
+                        if (found == 0) {
+                            const result = PayoutHistory.insert(record);
+                            console.log(record);
+                        } else {
+                            console.log("skipping: found %s %s in the db already...", record.symbol, record.exdivdate);
+                        }
+
+                    } else {
+                        console.log("skipping incomplete record for %s for the %s dividend", record.symbol, record.exdivdate);
+                    }
+
+                    console.log("=======================================");
+
+                    // pause a bit...
+                    Meteor._sleepForMs(10000);
+
+                });
+
+            });
+
+        }
+
+        // return records;
+
+    },
+
 
     getHistoricalQuotes: function (symbol, sdate, edate) {
 

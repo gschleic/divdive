@@ -7,7 +7,6 @@ import {Positions} from '../api/positions/positions';
 
 import {StockItem} from '../ui/StockItem';
 
-//var moment = require('moment');
 var moment = require('moment-business-days');
 
 import AccountsUIWrapper from './AccountsUIWrapper.jsx';

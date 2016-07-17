@@ -1,5 +1,13 @@
+//import './cron.js';
+
 Meteor.methods({
-    'stocks.test'() {
-        console.log("I am here...");
+    'stocks.findNewStocks'(delta) {
+       if (Meteor.userId() == 'glenn') {
+           const result = findNewStocks(delta);
+           return result;
+       } else {
+           return 'not authorized';
+       }
     }
+
 });
