@@ -12,6 +12,7 @@
     "react": "^15.2.0",
     "react-addons-pure-render-mixin": "^15.2.0",
     "react-dom": "^15.2.0",
+    "simple-statistics": "^2.1.0",
     "twilio": "^2.9.1",
     "underscore": "^1.8.3",
     "x-ray": "^2.3.0"

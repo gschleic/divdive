@@ -95,7 +95,7 @@ export default createContainer(() => {
     const dayafter = new moment().startOf('day').businessAdd(2).toDate();
 
     return {
-        todaystocks: Stocks.find({exDivDate: today}).fetch(),
+        todaystocks: Stocks.find({symbol: "CAT"}).fetch(),
         nextdaystocks: Stocks.find({exDivDate: nextday}).fetch(),
         dayafterstocks: Stocks.find({exDivDate: dayafter}).fetch(),
         positions: Positions.find({owner: Meteor.userId()}).fetch(),
