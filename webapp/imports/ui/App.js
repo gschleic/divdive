@@ -58,6 +58,8 @@ class App extends Component {
     render() {
         return (
             <div className="container">
+                <h2>DivDive - intelligent dividend capture</h2>
+                This is a really long line of text I am going to try to wrap it nicely to avoid the reader having to peruse the long line and thus making it hard to read
                 <header>
                     <img src="/images/banner.png"/>
 
